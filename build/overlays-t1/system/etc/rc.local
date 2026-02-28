@@ -1,0 +1,21 @@
+#!/bin/bash
+# FLSUN T1 Open Source Edition
+
+/etc/init.d/first-boot.sh
+/usr/bin/input-event-daemon &
+rfkill block bluetooth
+echo performance > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+
+# T1: Export PWM channels for caselight (pwm0) and optional beeper (pwm1)
+if [ -d /sys/class/pwm/pwmchip0 ]; then
+	echo 0 > /sys/class/pwm/pwmchip0/export 2>/dev/null || true
+	echo 1 > /sys/class/pwm/pwmchip0/export 2>/dev/null || true
+fi
+
+# Backlight brightness — same sysfs path as S1
+if [ -f /sys/devices/platform/backlight/backlight/backlight/brightness ]; then
+	echo 100 > /sys/devices/platform/backlight/backlight/backlight/brightness
+fi
+
+(sleep 15 && /usr/sbin/iwconfig wlan0 power off) &
+exit 0

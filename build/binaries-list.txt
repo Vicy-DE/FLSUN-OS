@@ -1,0 +1,22 @@
+# Format: url|output_path|sha256(optional)
+# Lines starting with # are comments and ignored.
+# Primary upstream: Guilouz GitHub release for FLSUN-OS 3.0
+# Source (release archive):
+# https://github.com/Guilouz/FLSUN-S1-Open-Source-Edition/releases/download/FLSUN-OS-3.0/FLSUN-OS-S1-EMMC-3.0.7z
+# Secondary mirror (Google Drive listed in docs):
+# https://drive.google.com/file/d/1GRZF0GbDqUsAQmInlMIeVWWoous_SDXx/view?usp=sharing
+
+# Recommended entry: download the release archive (7z) which contains boot.img + rootfs.img
+https://github.com/Guilouz/FLSUN-S1-Open-Source-Edition/releases/download/FLSUN-OS-3.0/FLSUN-OS-S1-EMMC-3.0.7z|resources/S1/firmwares/os-images/FLSUN-OS-S1-EMMC-3.0.7z
+
+# OPTIONAL: Mirror (Google Drive). Note: Google Drive URLs often require manual steps for large files.
+#https://drive.google.com/uc?export=download&id=1GRZF0GbDqUsAQmInlMIeVWWoous_SDXx|resources/S1/firmwares/os-images/FLSUN-OS-S1-EMMC-3.0.7z
+
+# Known local files (already present in this repo). Checksums computed from local copies:
+# resources/S1/firmwares/os-images/FLSUN-OS-S1-EMMC-3.0/boot.img  sha256=a619882d7e1a3fb8cd42462a1d3af48f41eaf519c67472970674ec36369a490a
+# resources/S1/firmwares/os-images/FLSUN-OS-S1-EMMC-3.0/rootfs.img sha256=b4240d0354d833ca9030c2cd50d6f2d1bc869260ff8d1b455e7f17143d92c28b
+# resources/S1/firmwares/os-images/FLSUN-OS-S1-EMMC-3.0/extracted/zImage sha256=62ad65b23c96455102c6c78564e4d8298a8d8e15d669179c20eeb64553a30f5f
+# resources/S1/firmwares/os-images/FLSUN-OS-S1-EMMC-3.0/extracted/rk-kernel.dtb sha256=e7ce56aa67c08a022676a53b09023034b7ed2a172400232a1aa333d9ee173098
+
+# If you want me to add direct-download lines for any other hosted binaries (T1 boot.img, rk-kernel-t1.dtb, etc.),
+# paste the exact URLs and I'll add them with SHA256 verification.

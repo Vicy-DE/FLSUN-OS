@@ -1,0 +1,26 @@
+#!/bin/sh
+
+case "$1" in
+	start)
+		printf "insmod NPU modules: "
+		cp /usr/lib/cl_*.h /tmp/ 2>/dev/null || true
+		insmod /lib/modules/galcore.ko contiguousSize=0x400000 2>/dev/null || true
+		unset MAX_FREQ
+		if [ -f /sys/class/devfreq/ffbc0000.npu/max_freq ]; then
+			read  MAX_FREQ < /sys/class/devfreq/ffbc0000.npu/max_freq
+			echo  $MAX_FREQ > /sys/class/devfreq/ffbc0000.npu/userspace/set_freq
+		fi
+		[ $? = 0 ] && echo "OK" || echo "FAIL"
+		start_rknn.sh &
+		;;
+	stop)
+		;;
+	restart|reload)
+		$0 stop
+		$0 start
+		;;
+	*)
+		echo "Usage: $0 {start|stop|restart}"
+		exit 1
+esac
+exit 0

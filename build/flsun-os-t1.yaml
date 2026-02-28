@@ -1,0 +1,605 @@
+{{- /* FLSUN OS — debos Recipe for Rockchip RV1109 (FLSUN T1) */ -}}
+{{- /* Adapted from S1 recipe for T1 hardware differences: */ -}}
+{{- /*   - garethky/klipper fork (load cell probe support) */ -}}
+{{- /*   - Upstream KlipperScreen (no T1-specific fork) */ -}}
+{{- /*   - SciPy dependency for load cell probe */ -}}
+{{- /*   - klipper_mcu Linux service for host MCU (caselight PWM) */ -}}
+{{- /*   - No drying box subsystem */ -}}
+{{- /*   - T1-specific overlay files (overlays-t1/) */ -}}
+
+{{ $image_size := or .image_size "8GB" }}
+{{ $hostname := or .hostname "FLSUN-OS" }}
+{{ $user := or .user "pi" }}
+{{ $password := or .password "flsun" }}
+{{ $root_password := or .root_password "flsun" }}
+{{ $suite := or .suite "trixie" }}
+{{ $arch := or .arch "armhf" }}
+{{ $mirror := or .mirror "http://deb.debian.org/debian" }}
+
+architecture: {{ $arch }}
+
+actions:
+
+  ##############################################################################
+  # Stage 1: Bootstrap Debian base system
+  ##############################################################################
+
+  - action: debootstrap
+    suite: {{ $suite }}
+    components:
+      - main
+      - contrib
+      - non-free
+      - non-free-firmware
+    mirror: {{ $mirror }}
+
+  ##############################################################################
+  # Stage 2: Configure APT repositories
+  ##############################################################################
+
+  - action: run
+    description: Configure APT sources
+    chroot: true
+    command: |
+      cat > /etc/apt/sources.list << 'EOF'
+      deb http://deb.debian.org/debian trixie main contrib non-free non-free-firmware
+      deb http://deb.debian.org/debian-security/ trixie-security main contrib non-free non-free-firmware
+      deb http://deb.debian.org/debian trixie-updates main contrib non-free non-free-firmware
+      deb http://deb.debian.org/debian trixie-backports main contrib non-free non-free-firmware
+      EOF
+      apt-get update
+
+  ##############################################################################
+  # Stage 3: Install core system packages
+  ##############################################################################
+
+  - action: apt
+    description: Install core system packages
+    packages:
+      # Base system
+      - systemd
+      - sudo
+      - bash
+      - locales
+      - openssh-server
+      - ca-certificates
+      - gnupg
+      - apt-utils
+      - apt-transport-https
+      # Networking
+      - network-manager
+      - wpasupplicant
+      - avahi-daemon
+      - rfkill
+      - wireless-tools
+      - curl
+      - wget
+      - ufw
+      # Filesystems & storage
+      - parted
+      - gdisk
+      - e2fsprogs
+      - dosfstools
+      - rsync
+      # System utilities
+      - screen
+      - jq
+      - git
+      - htop
+      - nano
+      - less
+      - procps
+      - lsof
+      - usbutils
+      - i2c-tools
+      - input-event-daemon
+      - logrotate
+      - cron
+      - dbus
+      - util-linux
+      - zram-tools
+
+  ##############################################################################
+  # Stage 4: Install build tools & cross-compilation toolchain
+  ##############################################################################
+
+  - action: apt
+    description: Install build tools for MCU firmware compilation
+    packages:
+      - build-essential
+      - gcc
+      - g++
+      - make
+      - cmake
+      - pkg-config
+      - autoconf
+      - automake
+      - libtool
+      - dpkg-dev
+      # ARM cross-compiler (for Klipper MCU firmware)
+      - gcc-arm-linux-gnueabihf
+      - g++-arm-linux-gnueabihf
+      - binutils-arm-linux-gnueabihf
+      # ARM bare-metal (for Cortex-M MCU firmware)
+      - gcc-arm-none-eabi
+      - binutils-arm-none-eabi
+      - libnewlib-arm-none-eabi
+      # AVR (for AVR-based MCU boards)
+      - gcc-avr
+      - binutils-avr
+      - avr-libc
+      - avrdude
+      # USB firmware flashing
+      - dfu-util
+
+  ##############################################################################
+  # Stage 5: Install Python 3.13 & development packages
+  ##############################################################################
+
+  - action: apt
+    description: Install Python 3 stack
+    packages:
+      - python3
+      - python3-dev
+      - python3-pip
+      - python3-venv
+      - python3-virtualenv
+      - python3-setuptools
+      - python3-wheel
+      - python3-serial
+      - python3-can
+      - python3-cffi
+      - python3-greenlet
+      - python3-numpy
+      - python3-pillow
+      - python3-jinja2
+      - python3-markupsafe
+      - python3-tornado
+      - python3-lmdb
+      - python3-inotify
+      - python3-paho-mqtt
+      - python3-zeroconf
+      - python3-libnacl
+      - python3-distutils-extra
+      - python3-packaging
+      - libpython3-dev
+      # SciPy — required for load cell probe notch/drift filters (T1-specific)
+      - python3-scipy
+
+  ##############################################################################
+  # Stage 6: Install display system (KlipperScreen)
+  ##############################################################################
+
+  - action: apt
+    description: Install X11 display stack for KlipperScreen
+    packages:
+      # X11 core
+      - xinit
+      - xserver-xorg
+      - xserver-xorg-core
+      - xserver-xorg-input-all
+      - xserver-xorg-input-evdev
+      - xserver-xorg-input-libinput
+      - xserver-xorg-video-fbdev
+      - x11-utils
+      - x11-xserver-utils
+      - x11-common
+      - xdotool
+      - xterm
+      # Window manager
+      - openbox
+      # GTK3 / GObject for KlipperScreen
+      - python3-gi
+      - python3-gi-cairo
+      - gir1.2-gtk-3.0
+      - gir1.2-pango-1.0
+      - libgtk-3-0
+      - libcairo2
+      - libpango-1.0-0
+      - libpangocairo-1.0-0
+      - libgdk-pixbuf-2.0-0
+      # Fonts
+      - fonts-freefont-ttf
+      - fonts-dejavu-core
+      - fonts-dejavu-extra
+      - fonts-noto-core
+      - fonts-noto-cjk
+
+  ##############################################################################
+  # Stage 7: Install media / camera packages
+  ##############################################################################
+
+  - action: apt
+    description: Install media and camera packages
+    packages:
+      - ffmpeg
+      - fswebcam
+      - v4l-utils
+      - imagemagick-7
+      - libjpeg-dev
+      - libpng-dev
+
+  ##############################################################################
+  # Stage 8: Install web server (Nginx for Mainsail/Fluidd)
+  ##############################################################################
+
+  - action: apt
+    description: Install Nginx web server
+    packages:
+      - nginx
+
+  ##############################################################################
+  # Stage 9: System configuration
+  ##############################################################################
+
+  - action: run
+    description: Configure OS identity
+    chroot: true
+    command: |
+      cat > /etc/os-release << 'EOF'
+      PRETTY_NAME="FLSUN OS T1 (Debian 13 Trixie)"
+      NAME="Debian GNU/Linux"
+      VERSION_ID="13"
+      VERSION="13 (trixie)"
+      VERSION_CODENAME=trixie
+      DEBIAN_VERSION_FULL=13.0
+      ID=debian
+      HOME_URL="https://www.debian.org/"
+      SUPPORT_URL="https://www.debian.org/support"
+      BUG_REPORT_URL="https://bugs.debian.org/"
+      EOF
+
+      # Set hostname
+      echo "{{ $hostname }}" > /etc/hostname
+      cat > /etc/hosts << EOF
+      127.0.0.1	localhost
+      127.0.1.1	{{ $hostname }}
+      ::1		localhost ip6-localhost ip6-loopback
+      ff02::1		ip6-allnodes
+      ff02::2		ip6-allrouters
+      EOF
+
+      # Configure locale
+      echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
+      locale-gen
+      echo 'LANG=en_US.UTF-8' > /etc/default/locale
+
+  ##############################################################################
+  # Stage 10: Create users
+  ##############################################################################
+
+  - action: run
+    description: Create pi user and set passwords
+    chroot: true
+    command: |
+      # Set root password
+      echo "root:{{ $root_password }}" | chpasswd
+
+      # Create pi user
+      useradd -m -s /bin/bash -G sudo,dialout,tty,video,input,plugdev {{ $user }}
+      echo "{{ $user }}:{{ $password }}" | chpasswd
+
+      # Create supplementary groups for services
+      groupadd -f moonraker-admin
+      groupadd -f klipperscreen
+      usermod -aG moonraker-admin {{ $user }}
+      usermod -aG klipperscreen {{ $user }}
+
+      # Allow pi to sudo without password
+      echo "{{ $user }} ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/{{ $user }}
+      chmod 0440 /etc/sudoers.d/{{ $user }}
+
+  ##############################################################################
+  # Stage 11: Configure SSH
+  ##############################################################################
+
+  - action: run
+    description: Configure SSH server
+    chroot: true
+    command: |
+      sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+      sed -i 's/^#PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+      sed -i 's/^#X11Forwarding.*/X11Forwarding yes/' /etc/ssh/sshd_config
+      # PrintMotd and PrintLastLog off
+      sed -i 's/^#PrintMotd.*/PrintMotd no/' /etc/ssh/sshd_config
+      sed -i 's/^#PrintLastLog.*/PrintLastLog no/' /etc/ssh/sshd_config
+      systemctl enable ssh
+
+  ##############################################################################
+  # Stage 12: Install Klipper ecosystem from Git (T1 forks)
+  ##############################################################################
+
+  - action: run
+    description: Clone Klipper (garethky load cell fork), Moonraker, KlipperScreen, and dependencies
+    chroot: true
+    command: |
+      su - {{ $user }} -c '
+        # --- Klipper (garethky load cell probe fork) ---
+        # T1 requires load_cell_probe support not in mainline Klipper
+        git clone -b load-cell-probe-community-testing \
+          https://github.com/garethky/klipper.git ~/klipper
+        python3 -m venv ~/klippy-env
+        ~/klippy-env/bin/pip install --no-cache-dir -r ~/klipper/scripts/klippy-requirements.txt
+        # SciPy for load cell probe notch/drift filters
+        ~/klippy-env/bin/pip install --no-cache-dir scipy
+
+        # --- Moonraker ---
+        git clone https://github.com/Arksine/moonraker.git ~/moonraker
+        python3 -m venv ~/moonraker-env
+        ~/moonraker-env/bin/pip install --no-cache-dir -r ~/moonraker/scripts/moonraker-requirements.txt
+
+        # --- KlipperScreen (upstream — no T1-specific fork) ---
+        git clone https://github.com/KlipperScreen/KlipperScreen.git ~/KlipperScreen
+        python3 -m venv ~/.KlipperScreen-env
+        ~/.KlipperScreen-env/bin/pip install --no-cache-dir -r ~/KlipperScreen/scripts/KlipperScreen-requirements.txt
+
+        # --- Katapult (bootloader tools) ---
+        git clone https://github.com/Arksine/katapult.git ~/katapult
+
+        # --- KIAUH (Klipper Install And Update Helper) ---
+        git clone https://github.com/dw-0/kiauh.git ~/kiauh
+      '
+
+  ##############################################################################
+  # Stage 13: Build MJPG-Streamer from source
+  ##############################################################################
+
+  - action: run
+    description: Build MJPG-Streamer
+    chroot: true
+    command: |
+      apt-get install -y libjpeg62-turbo-dev cmake
+      su - {{ $user }} -c '
+        git clone https://github.com/jacksonliam/mjpg-streamer.git ~/mjpg-streamer
+        cd ~/mjpg-streamer/mjpg-streamer-experimental
+        mkdir build && cd build
+        cmake ..
+        make -j$(nproc)
+        cd ..
+        cp -r build/mjpg_streamer .
+        cp -r build/*.so .
+      '
+
+  ##############################################################################
+  # Stage 14: Build klipper_mcu Linux process (T1 host MCU for caselight PWM)
+  ##############################################################################
+
+  - action: run
+    description: Build and install klipper_mcu Linux MCU service
+    chroot: true
+    command: |
+      su - {{ $user }} -c '
+        cd ~/klipper
+        # Build the Linux MCU firmware
+        cat > .config << KCEOF
+      CONFIG_LOW_LEVEL_OPTIONS=y
+      CONFIG_MACH_LINUX=y
+      CONFIG_BOARD_DIRECTORY="linux"
+      CONFIG_CLOCK_FREQ=50000000
+      CONFIG_LINUX_SELECT=y
+      KCEOF
+        make flash FLASH_DEVICE=/usr/local/bin/klipper_mcu
+        make clean
+      '
+
+  ##############################################################################
+  # Stage 15: Install Mainsail web UI
+  ##############################################################################
+
+  - action: run
+    description: Download and install Mainsail
+    chroot: true
+    command: |
+      su - {{ $user }} -c '
+        mkdir -p ~/mainsail
+        MAINSAIL_URL=$(curl -s https://api.github.com/repos/mainsail-crew/mainsail/releases/latest \
+          | grep "browser_download_url.*mainsail.zip" | cut -d\" -f4)
+        curl -sSL "$MAINSAIL_URL" -o /tmp/mainsail.zip
+        unzip -o /tmp/mainsail.zip -d ~/mainsail
+        rm /tmp/mainsail.zip
+      '
+
+  ##############################################################################
+  # Stage 16: Copy overlay files (configs, services, scripts)
+  ##############################################################################
+
+  - action: overlay
+    description: Copy T1 system overlay files
+    source: overlays-t1/system/
+
+  - action: overlay
+    description: Copy T1 user overlay files
+    source: overlays-t1/user/
+
+  ##############################################################################
+  # Stage 17: Create printer_data directory structure & deploy T1 configs
+  ##############################################################################
+
+  - action: run
+    description: Create printer_data directories and deploy T1 Klipper configs
+    chroot: true
+    command: |
+      su - {{ $user }} -c '
+        mkdir -p ~/printer_data/{config,comms,gcodes,logs,systemd,misc,tools}
+        mkdir -p ~/printer_data/config/Configurations
+
+        # Set up Klipper environment file
+        cat > ~/printer_data/systemd/klipper.env << ENVEOF
+      KLIPPER_ARGS="/home/{{ $user }}/klipper/klippy/klippy.py /home/{{ $user }}/printer_data/config/printer.cfg -I /home/{{ $user }}/printer_data/comms/klippy.serial -l /home/{{ $user }}/printer_data/logs/klippy.log -a /home/{{ $user }}/printer_data/comms/klippy.sock"
+      ENVEOF
+
+        # Set up Moonraker environment file
+        cat > ~/printer_data/systemd/moonraker.env << ENVEOF
+      MOONRAKER_ARGS="/home/{{ $user }}/moonraker/moonraker/moonraker.py -d /home/{{ $user }}/printer_data"
+      ENVEOF
+
+        # Moonraker allowed services (T1: includes klipper_mcu, no drying box)
+        cat > ~/printer_data/moonraker.asvc << ASVCEOF
+      klipper_mcu
+      webcamd
+      KlipperScreen
+      ASVCEOF
+
+        # Create initial save_variables file with defaults
+        cat > ~/printer_data/config/Configurations/variables.cfg << VAREOF
+      [Variables]
+      adaptive_bed_mesh = 0
+      full_bed_mesh = 0
+      gcode_offsets = {}
+      VAREOF
+      '
+
+  ##############################################################################
+  # Stage 18: Configure KIAUH for T1 Klipper fork
+  ##############################################################################
+
+  - action: run
+    description: Configure KIAUH to use garethky Klipper fork (load cell probe)
+    chroot: true
+    command: |
+      su - {{ $user }} -c '
+        mkdir -p ~/.kiauh
+        cat > ~/.kiauh/kiauh.ini << EOF
+      # KIAUH Configuration — T1 (garethky load cell probe fork)
+      application_updates_available=
+      backup_before_update=false
+      logupload_accepted=false
+      mainsail_install_unstable=false
+      fluidd_install_unstable=false
+      multi_instance_names=
+      mainsail_port=80
+      custom_klipper_repo=garethky/klipper
+      custom_klipper_repo_branch=load-cell-probe-community-testing
+      EOF
+      '
+
+  ##############################################################################
+  # Stage 19: Enable systemd services
+  ##############################################################################
+
+  - action: run
+    description: Enable custom systemd services (T1 — no drying-box, add klipper-mcu)
+    chroot: true
+    command: |
+      systemctl enable klipper.service
+      systemctl enable moonraker.service
+      systemctl enable KlipperScreen.service
+      systemctl enable webcamd.service
+      systemctl enable klipper-mcu.service
+      systemctl enable nginx.service
+      systemctl enable NetworkManager.service
+      systemctl enable avahi-daemon.service
+
+      # Make scripts executable
+      chmod +x /etc/rc.local
+      chmod +x /etc/init.d/first-boot.sh
+      chmod +x /etc/init.d/S60NPU_init
+      chmod +x /etc/power-key.sh
+      chmod +x /usr/local/bin/webcamd
+
+      # Create symlinks
+      ln -sf /home/{{ $user }}/kiauh/kiauh.sh /usr/bin/kiauh
+
+  ##############################################################################
+  # Stage 20: Set file ownership
+  ##############################################################################
+
+  - action: run
+    description: Fix ownership of pi home directory
+    chroot: true
+    command: |
+      chown -R {{ $user }}:{{ $user }} /home/{{ $user }}/
+
+  ##############################################################################
+  # Stage 21: Configure Nginx for Mainsail
+  ##############################################################################
+
+  - action: run
+    description: Configure Nginx for Mainsail web UI
+    chroot: true
+    command: |
+      rm -f /etc/nginx/sites-enabled/default
+      cat > /etc/nginx/sites-available/mainsail << 'NGINX_EOF'
+      server {
+          listen 80 default_server;
+          listen [::]:80 default_server;
+
+          root /home/pi/mainsail;
+          index index.html;
+          server_name _;
+
+          client_max_body_size 512M;
+
+          location / {
+              try_files $uri $uri/ /index.html;
+          }
+
+          location /websocket {
+              proxy_pass http://127.0.0.1:7125/websocket;
+              proxy_http_version 1.1;
+              proxy_set_header Upgrade $http_upgrade;
+              proxy_set_header Connection "upgrade";
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_read_timeout 86400;
+          }
+
+          location ~ ^/(printer|api|access|machine|server)/ {
+              proxy_pass http://127.0.0.1:7125;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          }
+      }
+      NGINX_EOF
+      ln -sf /etc/nginx/sites-available/mainsail /etc/nginx/sites-enabled/mainsail
+
+  ##############################################################################
+  # Stage 22: Clean up
+  ##############################################################################
+
+  - action: run
+    description: Clean up APT cache and temporary files
+    chroot: true
+    command: |
+      apt-get clean
+      rm -rf /var/lib/apt/lists/*
+      rm -rf /tmp/*
+      rm -f /var/log/*.log
+      # Remove machine-id so it regenerates on first boot
+      rm -f /etc/machine-id
+      touch /etc/machine-id
+
+  ##############################################################################
+  # Stage 23: Set up fstab
+  ##############################################################################
+
+  - action: run
+    description: Configure fstab
+    chroot: true
+    command: |
+      # fstab — rootfs only; zram swap added by first-boot.sh
+      cat > /etc/fstab << 'EOF'
+      # <file system>    <mount point>   <type>  <options>        <dump>  <pass>
+      /dev/root          /               ext4    defaults         0       1
+      EOF
+
+  ##############################################################################
+  # Stage 24: Create rootfs.img
+  ##############################################################################
+
+  - action: image-partition
+    description: Create rootfs partition image
+    imagename: rootfs.img
+    imagesize: {{ $image_size }}
+    partitiontype: msdos
+    partitions:
+      - name: rootfs
+        fs: ext4
+        start: 0%
+        end: 100%
+        flags: []
+
+  - action: filesystem-deploy
+    description: Deploy filesystem to image

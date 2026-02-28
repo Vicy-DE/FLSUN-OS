@@ -1,0 +1,15 @@
+# FLSUN T1 Open Source Edition
+# Klipper Linux MCU service — provides hardware PWM for caselight
+
+[Unit]
+Description=Klipper Linux MCU Service
+After=syslog.target
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/klipper_mcu -r
+Restart=always
+RestartSec=10

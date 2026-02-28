@@ -1,0 +1,10 @@
+# FLSUN S1 Open Source Edition
+
+[Unit]
+Description=Mount USB Drive on %i
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStart=/home/pi/flsun-os/system/usb-mount.sh add %i
+ExecStop=/home/pi/flsun-os/system/usb-mount.sh remove %i

@@ -1,0 +1,13 @@
+#!/bin/bash
+# FLSUN S1 Open Source Edition
+
+/etc/init.d/first-boot.sh
+/home/pi/flsun-os/system/usb-mount-delete-unused.sh &
+/usr/bin/input-event-daemon &
+rfkill block bluetooth
+echo performance > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+if [ -f /home/pi/flsun-os/system/brightness ]; then
+	echo $(cat /home/pi/flsun-os/system/brightness) >/sys/devices/platform/backlight/backlight/backlight/brightness
+fi
+(sleep 15 && /usr/sbin/iwconfig wlan0 power off) &
+exit 0

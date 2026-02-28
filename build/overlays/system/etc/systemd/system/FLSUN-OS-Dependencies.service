@@ -1,0 +1,14 @@
+# FLSUN S1 Open Source Edition
+
+[Unit]
+Description=Update OS Version Service
+After=network.target
+
+[Service]
+ExecStart=/home/pi/flsun-os/system/update-os.sh
+Type=simple
+Restart=no
+User=root
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+# FLSUN S1 Open Source Edition
+
+[Unit]
+Description=Drying Box Service
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+ExecStart=/home/pi/flsun-os/system/drying-box-info.sh
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

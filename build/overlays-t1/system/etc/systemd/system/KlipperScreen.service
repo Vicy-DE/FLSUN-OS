@@ -1,0 +1,30 @@
+# FLSUN T1 Open Source Edition
+
+[Unit]
+Description=KlipperScreen Service
+StartLimitIntervalSec=0
+After=systemd-user-sessions.service plymouth-quit-wait.service
+ConditionPathExists=/dev/tty0
+Wants=dbus.socket systemd-logind.service
+After=dbus.socket systemd-logind.service
+After=moonraker.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=2
+User=pi
+SupplementaryGroups=klipperscreen
+WorkingDirectory=/home/pi/KlipperScreen
+Environment="KS_XCLIENT=/home/pi/.KlipperScreen-env/bin/python /home/pi/KlipperScreen/screen.py" BACKEND=X
+ExecStart="/home/pi/KlipperScreen/scripts/KlipperScreen-start.sh"
+UtmpIdentifier=tty7
+UtmpMode=user
+PAMName=%u
+TTYPath=/dev/tty7
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+
+[Install]
+WantedBy=multi-user.target

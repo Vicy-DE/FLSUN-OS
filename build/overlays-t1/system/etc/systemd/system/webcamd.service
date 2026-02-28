@@ -1,0 +1,17 @@
+# FLSUN T1 Open Source Edition
+
+[Unit]
+Description=MJPG-Streamer Service
+After=network.target
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+Type=forking
+User=pi
+WorkingDirectory=/usr/local/bin
+StandardOutput=append:/var/log/webcamd.log
+StandardError=append:/var/log/webcamd.log
+ExecStart=/usr/local/bin/webcamd
+Restart=always
