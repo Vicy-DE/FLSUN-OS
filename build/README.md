@@ -294,7 +294,7 @@ Edit the Klipper ecosystem stage in the recipe to change fork URLs or branches:
 |-----------|--------|
 | SoC | Rockchip RV1109 (ARMv7, dual Cortex-A7 @ 1.512 GHz) |
 | RAM | 1 GB DDR3 |
-| Storage | 8 GB eMMC (GPT: 9 partitions) |
+| Storage | 8 GB eMMC (GPT: 6 partitions) |
 | Display | 7" 800×480 RGB parallel panel, PWM backlight (25 MHz pixel clock) |
 | PMIC | RK809 on I2C0 |
 | Main MCU | GD32F303 (STM32F103xe compatible), 72 MHz, 250000 baud on USB |
@@ -321,7 +321,7 @@ Edit the Klipper ecosystem stage in the recipe to change fork URLs or branches:
 | 5 | backup | 0x10000 | Backup partition |
 | 6 | rootfs | 0x40000 | rootfs.img (resized on first boot) |
 
-**T1** (9 partitions):
+**T1** (6 partitions):
 
 | # | Name | Offset (sectors) | Note |
 |---|------|-------------------|------|
@@ -330,10 +330,9 @@ Edit the Klipper ecosystem stage in the recipe to change fork URLs or branches:
 | 3 | boot | 0x6000 | boot.img (kernel + DTB) |
 | 4 | recovery | 0xE000 | Recovery image |
 | 5 | backup | 0x16000 | Backup partition |
-| 6 | oem | 0x56000 | OEM data |
-| 7 | userdata | 0x76000 | User data |
-| 8 | media | 0x78000 | Media |
-| 9 | rootfs | 0x7A000 | rootfs.img (resized on first boot) |
+| 6 | rootfs | 0x56000 | rootfs.img (resized on first boot) |
+
+> **Note:** The T1 stock GPT has 6 partitions (same names as S1: uboot, misc, boot, recovery, backup, rootfs). Earlier documentation incorrectly listed 9 partitions (with oem, userdata, media) based on a standard Rockchip SDK layout, but the actual stock eMMC dump (`1097_0p1.img` through `1097_0p6.img`) confirms only 6 exist. The oem/userdata/media partitions are Rockchip Buildroot/Android conventions that FLSUN did not use.
 
 ---
 

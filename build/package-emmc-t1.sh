@@ -2,8 +2,9 @@
 # FLSUN OS — eMMC Package Creator (T1 Edition)
 # Packages boot.img + rootfs.img into a 7z archive for RKDevTool flashing
 # ──────────────────────────────────────────────────────────────────────
-# The T1 stock eMMC has 9 partitions (vs S1's 6), but we only need
-# to flash boot + rootfs. The partition offsets may differ from S1.
+# The T1 stock eMMC has 6 partitions (same as S1: uboot, misc, boot,
+# recovery, backup, rootfs). Earlier references to 9 partitions were
+# incorrect — oem/userdata/media are Rockchip SDK defaults not used by FLSUN.
 #
 # T1 Stock Partition Layout:
 #   1. uboot      — U-Boot bootloader
@@ -12,7 +13,6 @@
 #   4. recovery   — Recovery image
 #   5. backup     — Empty
 #   6. rootfs     — Root filesystem (rootfs.img)
-#   + additional partitions (7-9)
 #
 # For initial flashing, we only replace boot + rootfs.
 # The U-Boot and other partitions are left as stock.

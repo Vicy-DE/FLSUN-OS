@@ -32,10 +32,12 @@
 |---|---|---|---|
 | Boot image format | Android boot (`ANDROID!` magic) | U-Boot FIT (`D00DFEED` magic) | **Must adapt** — use `mkbootimg` (S1 style) or create FIT |
 | U-Boot | Rockchip miniloader + U-Boot | Rockchip miniloader + U-Boot | Both use Rockchip bootloader chain |
-| Partition layout | GPT, 6 partitions | GPT, 9 partitions (stock) | Must either repartition or adapt to T1 layout |
+| Partition layout | GPT, 6 partitions | GPT, 6 partitions (stock) | **Same** — both use uboot/misc/boot/recovery/backup/rootfs |
 | Boot packaging script | `build-boot-img.sh` (mkbootimg) | N/A | Script needs T1 variant (if using Android boot format) |
 | eMMC flash tool | RKDevTool v2.96 | RKDevTool (Maskrom via USB-C) | Same tool, different partition addresses |
 | SD card boot | Supported (non-destructive) | Unknown (needs testing) | Investigate T1 U-Boot SD card boot support |
+
+> **Partition note (verified 2026-03-02):** The T1 stock eMMC dump (`1097_0p1.img` through `1097_0p6.img`) confirms exactly 6 partitions: uboot, misc, boot, recovery, backup, rootfs — identical names to S1. Earlier documentation incorrectly listed 9 partitions (including oem, userdata, media) based on the standard Rockchip SDK `parameter.txt` template. These 3 extra partitions are Rockchip Buildroot/Android conventions that FLSUN did not use on either the S1 or T1. **No oem/userdata/media partitions need to be created or removed — they never existed.**
 
 ### 1.3 Display
 
@@ -45,9 +47,30 @@
 | Resolution | 1024×600 | 800×480 | **DTB change only** — panel timing node |
 | Pixel clock | 51.2 MHz | 25 MHz | DTB timing parameters |
 | Backlight | PWM (`backlight` node) | PWM (`backlight` node) | Same driver, may need different PWM channel/period |
-| Touch | Goodix GT911 (I2C) | Goodix (likely GT911, I2C) | Verify I2C address and IRQ/reset GPIOs |
+| Touch | Goodix GT911 (I2C2, addr 0x5d) | Goodix GT911 (I2C2, addr 0x5d) | **Same** — verified identical I2C bus, address, IRQ/reset GPIOs |
 | KlipperScreen resolution | 1024×600 | 800×480 | Must adjust KlipperScreen display settings |
 | rc.local brightness path | `/sys/devices/platform/backlight/backlight/backlight/brightness` | Same path expected | Verify on T1 hardware |
+
+#### Touch Controller Detail (verified 2026-03-02)
+
+Both S1 and T1 use an identical Goodix GT911 touch controller on the same I2C bus and GPIO pins. Confirmed by comparing decompiled DTB files (`rk-kernel.dts` for S1, `fdt.dts` for T1 stock).
+
+| Property | S1 (from `rk-kernel.dts`) | T1 (from stock `fdt.dts`) | Match? |
+|---|---|---|---|
+| I2C bus | `i2c@ff400000` (i2c2) | `i2c@ff400000` (i2c2) | **Identical** |
+| I2C address | `0x5d` | `0x5d` | **Identical** |
+| I2C clock | 400 kHz (`0x61a80`) | 400 kHz (`0x61a80`) | **Identical** |
+| Compatible | `goodix,gt9xx` | `goodix,gt9xx` | **Identical** |
+| tp-size | 911 (`0x38f`) | 911 (`0x38f`) | **Identical** (GT911) |
+| Touch IRQ GPIO | GPIO3 pin 19 (GPIO3_C3), active-low | GPIO3 pin 19 (GPIO3_C3), active-low | **Identical** |
+| Reset GPIO | GPIO3 pin 18 (GPIO3_C2), active-high | GPIO3 pin 18 (GPIO3_C2), active-high | **Identical** |
+| max-x | 600 (`0x258`) | 800 (`0x320`) | **Different** — matches display height/width |
+| max-y | 1024 (`0x400`) | 480 (`0x1e0`) | **Different** — matches display height/width |
+| pinctrl | `touch-io/touch-gpio` at GPIO3 pin 0x13 | Same | **Identical** |
+
+> **S1 touch axis note:** The S1 touch reports max-x=600 and max-y=1024 on a 1024×600 display, meaning the touch panel is mounted 90° rotated relative to the display — X/Y are swapped. This is handled by software (KlipperScreen / X11 calibration). The T1 touch reports max-x=800, max-y=480 matching the 800×480 display directly (no rotation).
+>
+> **Porting impact:** The touch I2C bus, address, and GPIO pins require **no changes** in the T1 DTB. Only `max-x` and `max-y` differ to match the panel resolution, and these are already correct in the stock T1 DTB.
 
 ### 1.4 MCU — Main Motherboard
 
@@ -353,7 +376,7 @@ Architectural choices that affect the porting strategy:
 | 1.1 | Build 6.1.99 kernel with `rv1126_defconfig` for T1 | Medium | Not started | Same defconfig as S1, verify it boots on 2-core RV1109 |
 | 1.2 | Create T1 device tree (DTB) | Hard | Not started | Start from stock T1 DTB (4.19), port to 6.1.99 DTS format. Key nodes: display (800×480), GPIO, SPI, I2C, UART, PWM |
 | 1.3 | Verify display panel timing in DTB | Medium | Not started | 800×480 @ 25 MHz pixel clock in `simple-panel` node |
-| 1.4 | Verify touch controller (Goodix) in DTB | Easy | Not started | Check I2C address, IRQ pin, reset pin |
+| 1.4 | Verify touch controller (Goodix) in DTB | Easy | **Done** | **Verified:** GT911 on I2C2 addr 0x5d, IRQ=GPIO3_C3 (active-low), RST=GPIO3_C2 — identical to S1 |
 | 1.5 | Test kernel boot on T1 hardware | Medium | Not started | Need USB-C Maskrom access to flash |
 | 1.6 | Decide on boot image format (Android vs FIT) | Decision | Not started | Android boot is simpler (existing `mkbootimg` pipeline) |
 | 1.7 | Create/adapt boot image packaging script | Medium | Not started | Either `build-boot-img.sh` (Android) or FIT `mkimage` |
