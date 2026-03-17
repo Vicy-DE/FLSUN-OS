@@ -56,6 +56,25 @@ chmod +x build-t1.sh
 
 Output: `output/rootfs.img`
 
+### Build kernel from source (requires Linux/WSL)
+
+```bash
+chmod +x build-kernel.sh
+
+# ── S1 (default) ──
+./build-kernel.sh
+
+# ── T1 (patches DTB for 800×480 display) ──
+./build-kernel.sh --target t1
+
+# With menuconfig for manual tweaking
+./build-kernel.sh --target t1 --menuconfig
+```
+
+Output: `output/zImage`, `output/rk-kernel.dtb` (S1) or `output/rk-kernel-t1.dtb` (T1), `output/boot.img`
+
+Requires `gcc-arm-linux-gnueabihf` cross-compiler (install: `sudo apt install gcc-arm-linux-gnueabihf bc flex bison libssl-dev`).
+
 ### Build boot.img (requires kernel + DTB)
 
 ```bash
@@ -87,6 +106,22 @@ chmod +x package-emmc-t1.sh
 # Creates output/FLSUN-OS-T1-EMMC-1.0.7z
 ```
 
+### Package kernel as .deb (for apt delivery)
+
+```bash
+chmod +x package-kernel-deb.sh
+
+# Package S1 kernel as .deb
+./package-kernel-deb.sh --target s1
+
+# Package T1 kernel with explicit version
+./package-kernel-deb.sh --target t1 --version 6.1.115 --revision 1
+```
+
+Output: `output/flsun-os-kernel-{s1,t1}_{version}-{rev}_armhf.deb`
+
+The .deb `postinst` writes `boot.img` to `/dev/mmcblk0p3` via `dd` on install. See `docs/S1/research/13-apt-update-concept.md` for the full update strategy.
+
 ---
 
 ## File Structure
@@ -97,10 +132,12 @@ build/
 ├── flsun-os-t1.yaml            # T1 debos recipe (24 build stages, load cell + host MCU)
 ├── build.sh                    # S1 rootfs build script (wraps debos)
 ├── build-t1.sh                 # T1 rootfs build script (wraps debos)
+├── build-kernel.sh             # Kernel build script (S1/T1, cross-compile + boot.img)
 ├── build-boot-img.sh           # S1 boot image packaging (mkbootimg)
 ├── build-boot-img-t1.sh        # T1 boot image packaging (mkbootimg or FIT)
 ├── package-emmc.sh             # S1 eMMC archive creator (7z)
 ├── package-emmc-t1.sh          # T1 eMMC archive creator (7z)
+├── package-kernel-deb.sh       # Kernel .deb packager (for apt delivery)
 ├── README.md                   # This file
 ├── overlays/                   # S1 overlay files
 │   ├── system/                 # Files copied to rootfs as root
@@ -452,6 +489,69 @@ The rootfs modifier performs 13 steps:
 13. Fix file permissions
 
 In offline mode, steps 7–10 are deferred to a `~/.t1-klipper-switch-pending` marker file with instructions to run after first boot.
+
+---
+
+## Kernel Build from Source
+
+The FLSUN OS kernel is built from the **Armbian fork** of the Rockchip BSP kernel, confirmed by Guilouz in [Discussion #13](https://github.com/Guilouz/FLSUN-S1-Open-Source-Edition/discussions/13).
+
+| Property | Value |
+|---|---|
+| Repo | [armbian/linux-rockchip](https://github.com/armbian/linux-rockchip) |
+| Branch | `rk-6.1-rkr5.1` |
+| Defconfig | `arch/arm/configs/rv1126_defconfig` (shared by RV1126 + RV1109) |
+| Cross-compiler | `arm-linux-gnueabihf-gcc` 11.4.0 (Ubuntu 22.04) |
+| FLSUN OS 3.0 version | 6.1.99 (fully monolithic — zero modules) |
+| Submodule path | `kernel/` |
+
+The kernel source is available as a git submodule at `kernel/`. Full build documentation including config strategy, build commands, boot.img packaging, and flashing instructions is in `docs/S1/research/12-kernel-build-from-source.md`.
+
+### Using build-kernel.sh (Recommended)
+
+The `build-kernel.sh` script automates configuration, compilation, DTB patching, and boot.img packaging:
+
+```bash
+# Initialize kernel submodule (first time only)
+git submodule update --init --depth 1 kernel
+
+# Build for S1 (default)
+./build-kernel.sh
+
+# Build for T1 (patches DTB for 800×480 display)
+./build-kernel.sh --target t1
+
+# Clean + reconfigure + menuconfig
+./build-kernel.sh --target t1 --clean --menuconfig
+```
+
+The script:
+1. Copies the extracted FLSUN OS 3.0 kernel config as a defconfig
+2. Runs `make ARCH=arm flsun_{s1,t1}_defconfig` + `olddefconfig`
+3. Cross-compiles with `arm-linux-gnueabihf-gcc`
+4. Copies zImage and DTB to `output/`
+5. For T1: patches DTB with `patch-dtb-for-t1.py` (1024×600 → 800×480)
+6. Packages `boot.img` via `build-boot-img-t1.py`
+
+### Manual Build
+
+```bash
+# Clone source (if not using submodule)
+git clone --depth 1 -b rk-6.1-rkr5.1 \
+    https://github.com/armbian/linux-rockchip.git kernel
+
+# Configure using the extracted FLSUN OS 3.0 config
+cp resources/S1/firmwares/os-images/FLSUN-OS-S1-EMMC-3.0/extracted/kernel-config.txt \
+    kernel/arch/arm/configs/flsun_s1_defconfig
+cd kernel
+make ARCH=arm flsun_s1_defconfig
+
+# Build (requires Linux with arm cross-compiler)
+make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j$(nproc) zImage dtbs
+
+# Package boot.img
+cd .. && py build/tools/build-boot-img-t1.py output/zImage output/rk-kernel.dtb output/boot.img
+```
 
 ---
 

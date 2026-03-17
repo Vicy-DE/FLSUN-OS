@@ -12,6 +12,7 @@ This workspace contains research documentation and downloaded resources for **FL
 - S1 Klipper fork: https://github.com/Guilouz/Klipper-Flsun-S1
 - S1 KlipperScreen fork: https://github.com/Guilouz/KlipperScreen-Flsun-S1
 - S1 Live wiki: https://guilouz.github.io/FLSUN-S1-Open-Source-Edition/home.html
+- Kernel source: https://github.com/armbian/linux-rockchip (branch `rk-6.1-rkr5.1`, submodule at `kernel/`)
 - T1 Hardware/Pi replacement: https://github.com/mulcmu/T1-pyro
 
 ## Workspace Structure
@@ -23,8 +24,10 @@ FLSUN-OS/
 ├── build/                            # OS image build system (debos)
 │   ├── flsun-os.yaml                # Main debos recipe — S1 (23 stages)
 │   ├── build.sh                     # Rootfs build script (Docker/native)
+│   ├── build-kernel.sh              # Kernel build script (S1/T1, cross-compile + boot.img)
 │   ├── build-boot-img.sh            # Boot image packaging (mkbootimg)
 │   ├── package-emmc.sh              # eMMC archive creator (7z)
+│   ├── package-kernel-deb.sh        # Kernel .deb packager (for apt delivery)
 │   ├── README.md                    # Build system documentation
 │   ├── overlays/
 │   │   ├── system/                  # S1 system overlay files (services, scripts)
@@ -94,6 +97,7 @@ FLSUN-OS/
 │       │           ├── led-stock.cfg  # Caselight via host PWM
 │       │           └── filament-sensor-stock.cfg  # 3 filament sensors
 │       └── tools/                    # T1 tools (empty)
+├── kernel/                           # Kernel source (git submodule, armbian/linux-rockchip)
 └── S1-repo/                          # Full clone of S1 docs repository
 ```
 
@@ -131,7 +135,7 @@ When documenting research on a new topic:
 
 ## Technical Context
 
-### "Building" This Project Has Four Meanings
+### "Building" This Project Has Five Meanings
 1. **Docs site build:** `pip install mkdocs-material mkdocs-glightbox && mkdocs serve` (in the `S1-repo/` folder)
 2. **Printer OS build (full):** `cd build && ./build.sh` — debos recipe builds rootfs.img from scratch (Docker or native Linux)
 3. **Printer OS install (flash):** Flash pre-built images to eMMC via RKDevTool + compile/flash MCU firmware (hardware required)
@@ -139,6 +143,7 @@ When documenting research on a new topic:
    - `py build/tools/patch-dtb-for-t1.py` — patches S1 DTB for T1 display (800×480)
    - `py build/tools/build-boot-img-t1.py` — packages zImage + T1 DTB → boot.img
    - `bash build/tools/mod-rootfs-for-t1.sh /mnt/rootfs` — converts S1 rootfs for T1 (Linux/WSL)
+5. **Kernel build:** Cross-compile the kernel from `kernel/` (git submodule of armbian/linux-rockchip) — requires Linux with `arm-linux-gnueabihf-gcc`. See `docs/S1/research/12-kernel-build-from-source.md`
 
 ### S1 Key Technical Details
 - OS base: Debian 13 Trixie on Rockchip RV1126 SoC (ARMv7, quad-core Cortex-A7 @ 1.51 GHz, 1 GB DDR3)
@@ -151,6 +156,9 @@ When documenting research on a new topic:
 - eMMC image format: 7z archive with boot.img + rootfs.img only, flashed via RKDevTool v2.96
 - OS image build process: NOT publicly documented; see `docs/S1/research/08-os-image-build-process.md`
 - OS image build system: Reconstructed debos recipe in `build/` — see `build/README.md`
+- Kernel source: armbian/linux-rockchip branch `rk-6.1-rkr5.1` (confirmed by Guilouz in Discussion #13), submodule at `kernel/`
+- Kernel version: 6.1.99flsun (fully monolithic — 1,277 built-in, 0 modules)
+- Kernel build: requires Linux with `arm-linux-gnueabihf-gcc` 11.4.0 (Ubuntu 22.04). See `docs/S1/research/12-kernel-build-from-source.md`
 - Easy Installer: `easy-installer` CLI command over SSH
 
 ### T1 Key Technical Details
