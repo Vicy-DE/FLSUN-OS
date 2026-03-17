@@ -1,0 +1,4 @@
+[submodule "kernel"]
+	path = kernel
+	url = https://github.com/armbian/linux-rockchip.git
+	branch = rk-6.1-rkr5.1
