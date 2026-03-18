@@ -526,9 +526,9 @@ git submodule update --init --depth 1 kernel
 ```
 
 The script:
-1. Copies the extracted FLSUN OS 3.0 kernel config as a defconfig
-2. Runs `make ARCH=arm flsun_{s1,t1}_defconfig` + `olddefconfig`
-3. Cross-compiles with `arm-linux-gnueabihf-gcc`
+1. Copies the extracted FLSUN OS 3.0 kernel config into the out-of-tree build directory
+2. Runs `make O=output/kernel-build olddefconfig` (resolves new symbols with defaults)
+3. Cross-compiles with `arm-linux-gnueabihf-gcc` (source tree stays unmodified)
 4. Copies zImage and DTB to `output/`
 5. For T1: patches DTB with `patch-dtb-for-t1.py` (1024×600 → 800×480)
 6. Packages `boot.img` via `build-boot-img-t1.py`
@@ -540,17 +540,21 @@ The script:
 git clone --depth 1 -b rk-6.1-rkr5.1 \
     https://github.com/armbian/linux-rockchip.git kernel
 
-# Configure using the extracted FLSUN OS 3.0 config
+# Create out-of-tree build directory and configure
+mkdir -p build/output/kernel-build
 cp resources/S1/firmwares/os-images/FLSUN-OS-S1-EMMC-3.0/extracted/kernel-config.txt \
-    kernel/arch/arm/configs/flsun_s1_defconfig
-cd kernel
-make ARCH=arm flsun_s1_defconfig
+    build/output/kernel-build/.config
+make -C kernel ARCH=arm O="$(pwd)/build/output/kernel-build" olddefconfig
 
 # Build (requires Linux with arm cross-compiler)
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j$(nproc) zImage dtbs
+make -C kernel ARCH=arm O="$(pwd)/build/output/kernel-build" \
+    CROSS_COMPILE=arm-linux-gnueabihf- -j$(nproc) zImage dtbs
 
 # Package boot.img
-cd .. && py build/tools/build-boot-img-t1.py output/zImage output/rk-kernel.dtb output/boot.img
+py build/tools/build-boot-img-t1.py \
+    build/output/kernel-build/arch/arm/boot/zImage \
+    resources/S1/firmwares/os-images/FLSUN-OS-S1-EMMC-3.0/extracted/rk-kernel.dtb \
+    build/output/boot.img
 ```
 
 ---

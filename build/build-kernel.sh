@@ -18,6 +18,12 @@
 # For T1, the DTB is patched by build/tools/patch-dtb-for-t1.py after the kernel
 # build — the kernel tree does not contain the FLSUN custom DTS.
 #
+# Build strategy:
+#   Uses out-of-tree build (make O=...) so the kernel/ submodule is NEVER
+#   modified. All build artifacts and config go into build/output/kernel-build/.
+#   The .config is copied directly into the build directory — no defconfig is
+#   placed in the source tree.
+#
 # Prerequisites:
 #   - Linux or WSL with arm-linux-gnueabihf-gcc cross-compiler
 #   - bc, flex, bison, libssl-dev (kernel build deps)
@@ -38,6 +44,7 @@ WORKSPACE="$(cd "${SCRIPT_DIR}/.." && pwd)"
 KERNEL_DIR="${WORKSPACE}/kernel"
 OUTPUT_DIR="${SCRIPT_DIR}/output"
 TOOLS_DIR="${SCRIPT_DIR}/tools"
+BUILD_DIR="${OUTPUT_DIR}/kernel-build"  # out-of-tree build directory
 
 # Extracted FLSUN OS 3.0 config (6,529 lines, fully monolithic)
 FLSUN_CONFIG="${WORKSPACE}/resources/S1/firmwares/os-images/FLSUN-OS-S1-EMMC-3.0/extracted/kernel-config.txt"
@@ -130,35 +137,40 @@ echo "  Kernel:        ${KERNEL_VERSION}"
 echo "  Cross-compile: ${GCC_VERSION}"
 echo "  Jobs:          ${JOBS}"
 echo "  Source:        ${KERNEL_DIR}"
+echo "  Build dir:     ${BUILD_DIR}"
 echo "  Output:        ${OUTPUT_DIR}"
 echo ""
+
+# Common make arguments — out-of-tree build via O= keeps the submodule clean
+MAKE_ARGS=(ARCH=arm O="${BUILD_DIR}")
 
 # ── Step 1: Clean (optional) ─────────────────────────────────────────
 if [ "${DO_CLEAN}" = true ]; then
     echo "Step 1: Cleaning build tree..."
-    make -C "${KERNEL_DIR}" ARCH=arm mrproper
+    rm -rf "${BUILD_DIR}"
     echo "  Clean complete."
     echo ""
 fi
 
+mkdir -p "${BUILD_DIR}"
+
 # ── Step 2: Configure ────────────────────────────────────────────────
 echo "Step 2: Configuring kernel..."
 
-# Copy extracted FLSUN OS 3.0 config as a defconfig
-DEFCONFIG_NAME="flsun_${TARGET}_defconfig"
-cp "${FLSUN_CONFIG}" "${KERNEL_DIR}/arch/arm/configs/${DEFCONFIG_NAME}"
+# Copy the FLSUN OS 3.0 config directly into the out-of-tree build dir.
+# No files are placed inside the kernel/ submodule.
+cp "${FLSUN_CONFIG}" "${BUILD_DIR}/.config"
 
-# Apply defconfig (runs olddefconfig to resolve new options with defaults)
-make -C "${KERNEL_DIR}" ARCH=arm "${DEFCONFIG_NAME}"
-make -C "${KERNEL_DIR}" ARCH=arm olddefconfig
+# Resolve new/changed symbols with defaults (non-interactive)
+make -C "${KERNEL_DIR}" "${MAKE_ARGS[@]}" olddefconfig
 
-echo "  Config applied: ${DEFCONFIG_NAME}"
+echo "  Config applied from: $(basename "${FLSUN_CONFIG}")"
 echo ""
 
 # ── Step 3: menuconfig (optional) ────────────────────────────────────
 if [ "${DO_MENUCONFIG}" = true ]; then
     echo "Step 3: Opening menuconfig..."
-    make -C "${KERNEL_DIR}" ARCH=arm menuconfig
+    make -C "${KERNEL_DIR}" "${MAKE_ARGS[@]}" menuconfig
     echo ""
 fi
 
@@ -166,7 +178,7 @@ fi
 echo "Step 4: Compiling kernel (zImage + dtbs)..."
 
 make -C "${KERNEL_DIR}" \
-    ARCH=arm \
+    "${MAKE_ARGS[@]}" \
     CROSS_COMPILE="${CROSS_COMPILE}" \
     -j"${JOBS}" \
     zImage dtbs
@@ -177,8 +189,8 @@ echo ""
 # ── Step 5: Copy outputs ─────────────────────────────────────────────
 echo "Step 5: Copying build artifacts..."
 
-# Copy zImage
-cp "${KERNEL_DIR}/arch/arm/boot/zImage" "${OUTPUT_DIR}/zImage"
+# Copy zImage from the out-of-tree build directory
+cp "${BUILD_DIR}/arch/arm/boot/zImage" "${OUTPUT_DIR}/zImage"
 echo "  zImage:  $(du -h "${OUTPUT_DIR}/zImage" | cut -f1)"
 
 # Copy S1 DTB (from extracted FLSUN OS 3.0 — custom DTS not in kernel tree)
