@@ -1,0 +1,55 @@
+# FLSUN OS — SD Card Image Builder
+# Assembles a complete bootable SD card image for S1 or T1
+# ─────────────────────────────────────────────────────────
+# Build context MUST be the workspace root (FLSUN-OS/), not build/:
+#   docker build -f build/Dockerfile.sdcard -t flsun-sdcard-builder .
+#
+# Run:
+#   docker run --rm \
+#       -v "$(pwd)/build/output:/build/output" \
+#       -v "$(pwd)/bootloader:/build/bootloader" \
+#       flsun-sdcard-builder
+#
+#   docker run --rm \
+#       -v "$(pwd)/build/output:/build/output" \
+#       -v "$(pwd)/bootloader:/build/bootloader" \
+#       flsun-sdcard-builder --target t1
+#
+# The SD card image includes the FULL Rockchip boot chain:
+#   LBA 64:        IDBLoader (DDR init + SPL)
+#   Sector 0x4000: U-Boot (partition 1)
+#   Sector 0x6000: Trust / OP-TEE
+#   Sector 0x8000: boot.img — kernel + DTB (partition 3)
+#   Sector 0x40000: rootfs — ext4 filesystem (partition 6)
+#
+# For S1: the BootROM auto-boots from SD when inserted (no buttons needed)
+# For T1: SD boot is UNCONFIRMED — see docs/T1/research/07-sdcard-boot-analysis.md
+#
+# Inputs (volume-mounted at runtime — NOT baked into the image):
+#   /build/output/boot.img          — from Dockerfile.kernel or build-kernel.sh
+#   /build/output/rootfs.img        — from build.sh / debos
+#   /build/bootloader/{s1,t1}/      — extracted from stock firmware:
+#       idbloader.img   DDR init + SPL   (dd if=emmc.img of=... skip=64 count=16320)
+#       uboot.img       U-Boot           (dd if=/dev/mmcblk0p1 of=...)
+#       trust.img       OP-TEE           (dd if=emmc.img of=... skip=24576 count=8192)
+
+FROM debian:trixie-slim
+
+LABEL maintainer="FLSUN-OS Project"
+LABEL description="SD card image assembler for FLSUN S1/T1 printers"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        gdisk \
+        pigz \
+        util-linux \
+        coreutils \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+COPY build/docker-sdcard-build.sh /build/docker-sdcard-build.sh
+RUN chmod +x /build/docker-sdcard-build.sh \
+    && mkdir -p /build/output /build/bootloader/s1 /build/bootloader/t1
+
+ENTRYPOINT ["/build/docker-sdcard-build.sh"]
+CMD []

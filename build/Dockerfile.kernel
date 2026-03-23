@@ -1,0 +1,74 @@
+# FLSUN OS — Kernel Build Container
+# Cross-compiles the Linux kernel for S1 (RV1126) and T1 (RV1109)
+# ─────────────────────────────────────────────────────────────────
+# Build context MUST be the workspace root (FLSUN-OS/), not build/:
+#   docker build -f build/Dockerfile.kernel -t flsun-kernel-builder .
+#
+# Run:
+#   docker run --rm -v "$(pwd)/build/output:/build/output" flsun-kernel-builder
+#   docker run --rm -v "$(pwd)/build/output:/build/output" flsun-kernel-builder --target t1
+#
+# The container:
+#   1. Clones the kernel source (armbian/linux-rockchip, branch rk-6.1-rkr5.1)
+#   2. Copies the FLSUN OS 3.0 .config into an out-of-tree build directory
+#   3. Cross-compiles zImage + DTBs with arm-linux-gnueabihf-gcc
+#   4. Patches the DTB for T1 display if --target t1 is specified
+#   5. Packages the boot.img (Android format via Python mkbootimg)
+#   6. Outputs: zImage, rk-kernel.dtb, boot.img in /build/output/
+#
+# Build args:
+#   KERNEL_REPO    — kernel git URL (default: armbian/linux-rockchip)
+#   KERNEL_BRANCH  — branch to build (default: rk-6.1-rkr5.1)
+
+FROM debian:trixie-slim AS kernel-builder
+
+ARG KERNEL_REPO=https://github.com/armbian/linux-rockchip.git
+ARG KERNEL_BRANCH=rk-6.1-rkr5.1
+
+LABEL maintainer="FLSUN-OS Project"
+LABEL description="Cross-compilation environment for FLSUN OS kernel (ARMv7 / RV1126 / RV1109)"
+
+# ── Install build dependencies ──────────────────────────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        gcc-arm-linux-gnueabihf \
+        libc6-dev-armhf-cross \
+        bc \
+        bison \
+        flex \
+        libssl-dev \
+        make \
+        python3 \
+        python3-pip \
+        git \
+        ca-certificates \
+        kmod \
+        cpio \
+        u-boot-tools \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# ── Clone kernel source (shallow) ───────────────────────────────────
+# Shallow clone keeps the image ~600 MB smaller than a full clone
+RUN git clone --depth 1 --branch "${KERNEL_BRANCH}" "${KERNEL_REPO}" /build/kernel-src
+
+# ── Copy build scripts and tools ────────────────────────────────────
+COPY build/docker-kernel-build.sh /build/docker-kernel-build.sh
+COPY build/tools/patch-dtb-for-t1.py /build/tools/patch-dtb-for-t1.py
+COPY build/tools/build-boot-img-t1.py /build/tools/build-boot-img-t1.py
+
+# ── Copy the FLSUN OS 3.0 kernel config ─────────────────────────────
+# Extracted /proc/config.gz from FLSUN OS 3.0 — fully monolithic kernel
+COPY resources/S1/firmwares/os-images/FLSUN-OS-S1-EMMC-3.0/extracted/kernel-config.txt \
+     /build/kernel-config.txt
+
+# ── Copy the S1 DTB (used as-is for S1, patched for T1) ─────────────
+COPY resources/S1/firmwares/os-images/FLSUN-OS-S1-EMMC-3.0/extracted/rk-kernel.dtb \
+     /build/rk-kernel.dtb
+
+# ── Create output directory ─────────────────────────────────────────
+RUN mkdir -p /build/output \
+    && chmod +x /build/docker-kernel-build.sh
+
+ENTRYPOINT ["/build/docker-kernel-build.sh"]
+CMD []

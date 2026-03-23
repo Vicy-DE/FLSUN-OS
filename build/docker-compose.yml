@@ -1,0 +1,131 @@
+# FLSUN OS — Docker Compose Build Orchestration
+# ─────────────────────────────────────────────────
+# Orchestrates kernel builds, rootfs builds, and SD card image assembly.
+#
+# Usage:
+#   docker compose build                        # Build all Docker images
+#   docker compose run kernel-s1                 # Build S1 kernel + boot.img
+#   docker compose run kernel-t1                 # Build T1 kernel + boot.img
+#   docker compose run rootfs-s1                 # Build S1 rootfs.img (debos)
+#   docker compose run rootfs-t1                 # Build T1 rootfs.img (debos)
+#   docker compose run sdcard-s1                 # Assemble S1 SD card image
+#   docker compose run sdcard-t1                 # Assemble T1 SD card image
+#
+# Typical full build sequence:
+#   1. docker compose run kernel-s1              # produces output/boot.img
+#   2. docker compose run rootfs-s1              # produces output/rootfs.img
+#   3. docker compose run sdcard-s1              # produces output/FLSUN-OS-S1-SD.img.gz
+#
+# The build context for kernel and sdcard is the workspace root (../).
+# debos (rootfs) uses the pre-built godebos/debos image directly.
+#
+# All services share the same output/ directory via bind mount.
+
+services:
+
+  # ── Kernel build — S1 ────────────────────────────────────────────────
+  kernel-s1:
+    build:
+      context: ../
+      dockerfile: build/Dockerfile.kernel
+    image: flsun-kernel-builder
+    command: ["--target", "s1"]
+    volumes:
+      - ./output:/build/output
+
+  # ── Kernel build — T1 ────────────────────────────────────────────────
+  kernel-t1:
+    build:
+      context: ../
+      dockerfile: build/Dockerfile.kernel
+    image: flsun-kernel-builder
+    command: ["--target", "t1"]
+    volumes:
+      - ./output:/build/output
+
+  # ── Rootfs build — S1 (debos) ────────────────────────────────────────
+  # Uses the official godebos/debos image with our recipe mounted in.
+  # Requires /dev/kvm on the host (QEMU user-mode emulation for armhf).
+  rootfs-s1:
+    image: godebos/debos
+    working_dir: /recipes
+    devices:
+      - /dev/kvm
+    security_opt:
+      - label:disable
+    volumes:
+      - .:/recipes
+    command: >
+      -t image_size:8GB
+      -t hostname:FLSUN-OS
+      -t user:pi
+      -t password:flsun
+      -t root_password:flsun
+      -t suite:trixie
+      -t arch:armhf
+      -t mirror:http://deb.debian.org/debian
+      /recipes/flsun-os.yaml
+
+  # ── Rootfs build — T1 (debos) ────────────────────────────────────────
+  rootfs-t1:
+    image: godebos/debos
+    working_dir: /recipes
+    devices:
+      - /dev/kvm
+    security_opt:
+      - label:disable
+    volumes:
+      - .:/recipes
+    command: >
+      -t image_size:8GB
+      -t hostname:FLSUN-OS
+      -t user:pi
+      -t password:flsun
+      -t root_password:flsun
+      -t suite:trixie
+      -t arch:armhf
+      -t mirror:http://deb.debian.org/debian
+      /recipes/flsun-os-t1.yaml
+
+  # ── SD card image — S1 ──────────────────────────────────────────────
+  # Requires bootloader binaries extracted from stock firmware.
+  # Place them in bootloader/s1/ (idbloader.img, uboot.img, trust.img).
+  sdcard-s1:
+    build:
+      context: ../
+      dockerfile: build/Dockerfile.sdcard
+    image: flsun-sdcard-builder
+    command: ["--target", "s1"]
+    volumes:
+      - ./output:/build/output
+      - ./bootloader:/build/bootloader
+
+  # ── SD card image — T1 ──────────────────────────────────────────────
+  sdcard-t1:
+    build:
+      context: ../
+      dockerfile: build/Dockerfile.sdcard
+    image: flsun-sdcard-builder
+    command: ["--target", "t1"]
+    volumes:
+      - ./output:/build/output
+      - ./bootloader:/build/bootloader
+
+  # ── eMMC package — S1 ───────────────────────────────────────────────
+  # Packages boot.img + rootfs.img into a 7z archive for RKDevTool.
+  emmc-s1:
+    image: debian:trixie-slim
+    working_dir: /build
+    volumes:
+      - .:/build
+    entrypoint: ["/bin/bash"]
+    command: ["/build/package-emmc.sh", "custom"]
+
+  # ── eMMC package — T1 ───────────────────────────────────────────────
+  emmc-t1:
+    image: debian:trixie-slim
+    working_dir: /build
+    volumes:
+      - .:/build
+    entrypoint: ["/bin/bash"]
+    command: ["/build/package-emmc-t1.sh", "custom"]

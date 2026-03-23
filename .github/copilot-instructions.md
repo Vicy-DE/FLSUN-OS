@@ -43,6 +43,7 @@ FLSUN-OS/
 │       ├── patch-dtb-for-t1.py      # Patch S1 DTB → T1 display (800×480)
 │       ├── build-boot-img-t1.py     # Package zImage + DTB → Android boot.img
 │       ├── build-images-t1.py       # *** Master image builder (3 images) ***
+│       ├── build-sdcard-t1.py       # *** SD card image builder (Phase 1+2) ***
 │       ├── build-rootfs-t1.sh       # Rootfs builder (S1→T1, Linux only)
 │       └── mod-rootfs-for-t1.sh     # Convert S1 rootfs to T1 (bash, Linux/WSL)
 ├── docs/
@@ -135,7 +136,7 @@ When documenting research on a new topic:
 
 ## Technical Context
 
-### "Building" This Project Has Five Meanings
+### "Building" This Project Has Six Meanings
 1. **Docs site build:** `pip install mkdocs-material mkdocs-glightbox && mkdocs serve` (in the `S1-repo/` folder)
 2. **Printer OS build (full):** `cd build && ./build.sh` — debos recipe builds rootfs.img from scratch (Docker or native Linux)
 3. **Printer OS install (flash):** Flash pre-built images to eMMC via RKDevTool + compile/flash MCU firmware (hardware required)
@@ -143,7 +144,11 @@ When documenting research on a new topic:
    - `py build/tools/patch-dtb-for-t1.py` — patches S1 DTB for T1 display (800×480)
    - `py build/tools/build-boot-img-t1.py` — packages zImage + T1 DTB → boot.img
    - `bash build/tools/mod-rootfs-for-t1.sh /mnt/rootfs` — converts S1 rootfs for T1 (Linux/WSL)
-5. **Kernel build:** Cross-compile the kernel from `kernel/` (git submodule of armbian/linux-rockchip) — requires Linux with `arm-linux-gnueabihf-gcc`. See `docs/S1/research/12-kernel-build-from-source.md`
+5. **T1 SD card build:** `py build/tools/build-sdcard-t1.py --phase1` or `--phase2` — builds bootable SD card images for T1:
+   - Phase 1: Boot-test image (S1 rootfs unchanged, T1 bootloader + DTB for display)
+   - Phase 2: Full T1 image (rootfs modified via WSL Debian, Klipper configs, services, etc.)
+   - Extracts IDBLoader + U-Boot from T1 stock eMMC dump, builds GPT SD image in pure Python
+6. **Kernel build:** Cross-compile the kernel from `kernel/` (git submodule of armbian/linux-rockchip) — requires Linux with `arm-linux-gnueabihf-gcc`. See `docs/S1/research/12-kernel-build-from-source.md`
 
 ### S1 Key Technical Details
 - OS base: Debian 13 Trixie on Rockchip RV1126 SoC (ARMv7, quad-core Cortex-A7 @ 1.51 GHz, 1 GB DDR3)
@@ -186,7 +191,11 @@ When documenting research on a new topic:
 - Klipper config: 3 MCUs (main USB + host Linux + LoadCell UART), dedicated per-driver SPI for TMC5160s, load_cell_probe (HX717 strain gauge), single bed heater, 3 filament sensors, no drying box/power loss/motor cal. See `docs/T1/research/04-klipper-config-analysis.md`
 - Daughter boards: USB hub board (camera + USB + caselight transistor, 5-pin JST XH), Lower function adapter board (LoadCell STM32F103, HX717 ADC, 5V PSU, JTAG, needs J20 mod for UART)
 - Klipper fork: garethky/klipper load-cell-probe-community-testing (requires SciPy); S1 fork features (auto PA, enhanced delta cal, M101) NOT available
-- T1 image toolchain: `build/tools/` contains Python scripts to create T1 firmware from S1 FLSUN-OS 3.0 (DTB patcher, boot.img builder, rootfs modifier)
+- T1 image toolchain: `build/tools/` contains Python scripts to create T1 firmware from S1 FLSUN-OS 3.0 (DTB patcher, boot.img builder, rootfs modifier, SD card builder)
+- SD card boot: **Confirmed working** — RV1109 BootROM scans SD before eMMC (same as S1's RV1126). S1 SD card auto-boots on T1 hardware. T1 SD images built by `build/tools/build-sdcard-t1.py`
+- eMMC partition layout: GPT with 6 partitions — rootfs starts at sector **0x38000** (differs from S1's 0x40000)
+- Bootloader: IDBLoader at sector 64 (~3.6 MB) + U-Boot FIT at p1 (includes OP-TEE, no separate trust partition)
+- Stock eMMC dumps: All gzip-compressed without .gz extension in `resources/T1/firmwares/stock/`
 
 ### Working with Downloaded Resources
 - S1 firmware `.bin` files in `resources/S1/firmwares/` are ready-to-flash binaries
